@@ -21,6 +21,8 @@ defflag	opt_xen.h		DO_NOT_DEFINE
 # Option to have a static kernel memory layout
 defflag opt_kaslr.h	NO_X86_ASLR
 
+defflag opt_efi.h	EFI_RUNTIME
+
 defflag	SVS
 
 defflag	PCPU_IDT
