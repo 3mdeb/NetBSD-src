@@ -80,6 +80,9 @@ static const struct efi_ops *efi_ops = NULL;
  */
 static u_int efi_isopen = 0;
 
+/* Autoconfiguration glue */
+void	efiattach(int count);
+
 static dev_type_open(efi_open);
 static dev_type_close(efi_close);
 static dev_type_ioctl(efi_ioctl);
@@ -144,6 +147,40 @@ efi_status_to_error(efi_status status)
 	default:
 		return EIO;
 	}
+}
+
+static int
+efi_ioctl_table_get(struct efi_table_ioc *var)
+{
+	struct efi_table_ioc *egtioc = (struct efi_table_ioc *)var;
+	void *buf = NULL;
+	int error;
+
+	aprint_normal("DEBUG ioctl_table_get 1\n");
+
+	error = efi_ops->efi_copytable(&egtioc->uuid, egtioc->buf ? &buf : NULL,
+		egtioc->buf_len, &egtioc->table_len);
+
+	aprint_normal("DEBUG ioctl_table_get 2\n");
+
+	if (error != 0 || egtioc->buf == NULL)
+		return EINVAL; // TODO check this return val
+
+	aprint_normal("DEBUG ioctl_table_get 3\n");
+
+	if (egtioc->buf_len < egtioc->table_len) {
+		kmem_free(buf, egtioc->buf_len);
+		return EINVAL;
+	}
+
+	aprint_normal("DEBUG ioctl_table_get 4\n");
+
+	error = copyout(buf, egtioc->buf, egtioc->buf_len);
+	kmem_free(buf, egtioc->buf_len);
+	
+	aprint_normal("DEBUG ioctl_table_get 5\n");
+
+	return 0;
 }
 
 static int
@@ -286,6 +323,8 @@ efi_ioctl(dev_t dev, u_long cmd, void *data, int flags, struct lwp *l)
 	KASSERT(efi_ops != NULL);
 
 	switch (cmd) {
+	case EFIIOC_TABLE_GET:
+		return efi_ioctl_table_get(data);
 	case EFIIOC_VAR_GET:
 		return efi_ioctl_var_get(data);
 	case EFIIOC_VAR_NEXT:
@@ -307,4 +346,27 @@ efi_register_ops(const struct efi_ops *ops)
 void
 efiattach(int count)
 {
+	// DEBUG
+	struct efi_table_ioc table = {
+		.buf = NULL,
+		.buf_len = 0,
+		.table_len = 0,
+		.uuid = EFI_TABLE_ACPI20
+	};
+
+	aprint_normal("efi device is running\n");
+
+	int error = efi_ioctl_table_get(&table);
+
+	aprint_normal("get esrt: %d\n", error);
+
+	if (error < 0) {
+		aprint_error("error getting esrt table\n");
+		return;
+	}
+	
+	struct efi_esrt_table *esrt_table = (struct efi_esrt_table*)table.buf;
+
+	aprint_normal("ESRT resource version: %ld\n", esrt_table->fw_resource_version);
+	aprint_normal("ESRT resource count: %d\n", esrt_table->fw_resource_count);
 }

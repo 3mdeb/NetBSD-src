@@ -50,6 +50,7 @@ const struct uuid EFI_UUID_ACPI20 = EFI_TABLE_ACPI20;
 const struct uuid EFI_UUID_ACPI10 = EFI_TABLE_ACPI10;
 const struct uuid EFI_UUID_SMBIOS = EFI_TABLE_SMBIOS;
 const struct uuid EFI_UUID_SMBIOS3 = EFI_TABLE_SMBIOS3;
+const struct uuid EFI_UUID_ESRT = EFI_TABLE_ESRT;
 
 static vaddr_t	efi_getva(paddr_t);
 static void	efi_relva(paddr_t, vaddr_t);
@@ -132,6 +133,8 @@ efi_aprintuuid(const struct uuid * uuid)
 		aprint_debug(" SMBIOS");
 	} else if (efi_uuideq(uuid, &EFI_UUID_SMBIOS3)) {
 		aprint_debug(" SMBIOS3");
+	} else if (efi_uuideq(uuid, &EFI_UUID_ESRT)) {
+		aprint_debug(" ESRT");
 	}
 }
 
@@ -405,9 +408,53 @@ efi_init(void)
 		return;
 	}
 	bootmethod_efi = true;
+
+	efi_print_esrt();
+
 #if NPCI > 0
 	pci_mapreg_map_enable_decode = true; /* PR port-amd64/53286 */
 #endif
+}
+
+/*
+ * Prints ESRT contents to dmesg when booting in debug mode
+ * `boot -x` 
+ */
+void
+efi_print_esrt(void)
+{
+	const struct uuid esrt_uuid = (const struct uuid) EFI_TABLE_ESRT;
+
+	struct efi_esrt_table *esrt = NULL;
+	struct efi_esrt_entry_v1 *esrt_entries;
+
+	esrt = (struct efi_esrt_table *) efi_getcfgtbl(&esrt_uuid);
+
+	if (esrt == NULL || esrt == 0) {
+		aprint_error("ESRT Couldn't find esrt on the system\n");
+		return;
+	}
+
+	aprint_debug("ESRT Fw Resource Count = %d\n", esrt->fw_resource_count);
+	aprint_debug("ESRT Fw Max Resource Count = %d\n", esrt->fw_resource_count_max);
+	aprint_debug("ESRT Fw Resource Version = %ld\n", esrt->fw_resource_version);
+
+	esrt_entries = (struct efi_esrt_entry_v1 *) esrt->entries;
+
+	for (int i = 0; i < esrt->fw_resource_count; ++i) {
+		const struct efi_esrt_entry_v1 *e = &esrt_entries[i];
+
+		aprint_debug("ESRT[%d]:\n", i);
+		aprint_debug("	Fw Class:");
+		efi_aprintuuid(&e->fw_class);
+		aprint_debug("\n");
+		aprint_debug("  Fw Type: 0x%08x\n", e->fw_type);
+		aprint_debug("  Fw Version: 0x%08x\n", e->fw_version);
+		aprint_debug("  Lowest Supported Fw Version: 0x%08x\n", e->lowest_supported_fw_version);
+		aprint_debug("  Capsule Flags: 0x%08x\n", e->capsule_flags);
+		aprint_debug("  Last Attempt Version: 0x%08x\n", e->last_attempt_version);
+		aprint_debug("  Last Attempt Status: 0x%08x\n", e->last_attempt_status);
+	}
 }
 
 bool

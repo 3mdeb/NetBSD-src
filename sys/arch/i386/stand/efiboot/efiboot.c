@@ -61,6 +61,12 @@ efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable)
 	efi_main_sp = (uintptr_t)&status;
 	twiddle_toggle = 1;	/* no twiddling until we're ready */
 
+	void *esrt_root = NULL;
+	int esrt_cfgtbl_index = -1;
+
+	EFI_GUID EsrtGuid = \
+	{0xb122a263,0x3661,0x4f68,{0x99,0x29,0x78,0xf8,0xb0,0xd6,0x21,0x80}};
+	
 	cninit();
 	efi_heap_init();
 	efi_md_init();
@@ -93,6 +99,37 @@ efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE *systemTable)
 	efi_disk_probe();
 	efi_pxe_probe();
 	efi_net_probe();
+
+	for (int i = 0; i < systemTable->NumberOfTableEntries; ++i) {
+		if (!memcmp(&EsrtGuid, &(systemTable->ConfigurationTable[i].VendorGuid), sizeof(EFI_GUID))) {
+			esrt_cfgtbl_index = i;
+			esrt_root = systemTable->ConfigurationTable[i].VendorTable;
+			break;
+		}
+	}
+	if (esrt_cfgtbl_index == -1 || esrt_root == NULL) {
+		panic("ESRT not found\n");
+	}
+
+	struct EFI_SYSTEM_RESOURCE_TABLE *esrt = (struct EFI_SYSTEM_RESOURCE_TABLE *) esrt_root;
+
+	int esrt_size = sizeof(struct EFI_SYSTEM_RESOURCE_TABLE) + esrt->FwResourceCount * sizeof(struct EFI_SYSTEM_RESOURCE_ENTRY);
+
+	void *esrt_copy = NULL; 
+
+	status = uefi_call_wrapper(BS->AllocatePool,
+									3,
+									EfiRuntimeServicesData,
+									esrt_size,
+									(void**) &esrt_copy
+									);
+	if (EFI_ERROR(status)) {
+		panic("AllocatePool() in RuntimeServicesData failed: %d bytes\n", esrt_size);
+		return EIO;
+	}
+
+	CopyMem(esrt_copy, esrt, esrt_size);
+	systemTable->ConfigurationTable[esrt_cfgtbl_index].VendorTable = esrt_copy;
 
 	status = uefi_call_wrapper(BS->SetWatchdogTimer, 4, 0, 0, 0, NULL);
 	if (EFI_ERROR(status))
