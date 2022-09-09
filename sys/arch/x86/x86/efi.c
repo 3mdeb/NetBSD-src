@@ -574,17 +574,22 @@ efi_rt_init(void)
 void
 efi_map_runtime(void)
 {
+	aprint_normal("EFI map_runtime 1 @ @ @ @ @ @ @\n");
 	//efi_status status;
 	struct efi_memory_descriptor *desc;
 	int i;
 
 	struct btinfo_memmap *bim = efi_get_e820memmap();
 
+	aprint_normal("EFI map_runtime 2 @ @ @ @ @ @ @\n");
+
 	struct bi_memmap_entry *bi_entry = (struct bi_memmap_entry *)&bim;
 
 	uint32_t mmap_desc_size = bim->common.len;
 	uint32_t mmap_size = bi_entry->size;
 	paddr_t mmap_start = bi_entry->addr;
+
+	aprint_normal("EFI map_runtime 3 @ @ @ @ @ @ @\n");
 
 	efi_pm = pmap_create();
 
@@ -593,10 +598,17 @@ efi_map_runtime(void)
 
 	//desc = (struct efi_memory_descriptor *)((uint64_t)PMAP_DIRECT_MAP(mmap_start));
 
+	aprint_normal("EFI map_runtime 4 @ @ @ @ @ @ @\n");
+
 	desc = (struct efi_memory_descriptor *)efi_getva(mmap_start);
 
+	aprint_normal("EFI map_runtime 5 @ @ @ @ @ @ @\n");
+
 	for (i = 0; i < mmap_size / mmap_desc_size; i++) {
+		aprint_normal("EFI map_runtime loop @ @ @ @ @ @ @\n");
+
 		if ((desc->attribute & EFI_MEMORY_RUNTIME) || desc->type == EFI_MD_TYPE_FIRMWARE) {
+			
 			vaddr_t va = desc->virtual_start;
 			paddr_t pa = desc->physical_start;
 			int npages = desc->number_of_pages;
