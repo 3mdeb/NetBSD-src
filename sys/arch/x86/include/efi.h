@@ -50,6 +50,28 @@
 #define       EFI_TABLE_ESRT						\
 	{0xb122a263,0x3661,0x4f68,0x99,0x29,{0x78,0xf8,0xb0,0xd6,0x21,0x80}}
 
+// possible caching types for the memory range
+#define EFI_MEMORY_UC           0x0000000000000001
+#define EFI_MEMORY_WC           0x0000000000000002
+#define EFI_MEMORY_WT           0x0000000000000004
+#define EFI_MEMORY_WB           0x0000000000000008
+#define EFI_MEMORY_UCE          0x0000000000000010
+
+// physical memory protection on range
+#define EFI_MEMORY_WP           0x0000000000001000
+#define EFI_MEMORY_RP           0x0000000000002000
+#define EFI_MEMORY_XP           0x0000000000004000
+
+#define EFI_MEMORY_RUNTIME      0x8000000000000000
+
+#define NextMemoryDescriptor(Ptr, Size) \
+	((struct efi_memory_descriptor *)(((uint8_t *)Ptr) + Size))
+
+// without this, any usage results in implicit declaration of function
+#define PMAP_DIRECT_BASE	pmap_direct_base
+#define PMAP_DIRECT_MAP(pa)	((vaddr_t)PMAP_DIRECT_BASE + (pa))
+
+
 extern const struct uuid EFI_UUID_ACPI20;
 extern const struct uuid EFI_UUID_ACPI10;
 extern const struct uuid EFI_UUID_SMBIOS;
@@ -360,14 +382,14 @@ struct efi_systbl64 {
 
 #define ESRT_FIRMWARE_RESOURCE_VERSION 1
 
-// typedef struct {
-//     UINT32                          Type;           // Field size is 32 bits followed by 32 bit pad
-//     UINT32                          Pad;
-//     EFI_PHYSICAL_ADDRESS            PhysicalStart;  // Field size is 64 bits
-//     EFI_VIRTUAL_ADDRESS             VirtualStart;   // Field size is 64 bits
-//     UINT64                          NumberOfPages;  // Field size is 64 bits
-//     UINT64                          Attribute;      // Field size is 64 bits
-// } EFI_MEMORY_DESCRIPTOR;
+struct efi_memory_descriptor {
+    uint32_t                          type;           // Field size is 32 bits followed by 32 bit pad
+    uint32_t                          pad;
+    paddr_t                           physical_start;  // Field size is 64 bits
+    vaddr_t                           virtual_start;   // Field size is 64 bits
+    uint64_t                          number_of_pages;  // Field size is 64 bits
+    uint64_t                          attribute;      // Field size is 64 bits
+};
 
 struct efi_esrt_table {
 	uint32_t	fw_resource_count;
@@ -392,6 +414,17 @@ struct efi_prop_table {
 	uint64_t	memory_protection_attribute;
 };
 
+#if defined(__i386__) || defined(__x86_64__)
+#define EFI_ATTRIBUTES __attribute__((ms_abi))
+#else
+#define EFI_ATTRIBUTES
+#endif
+
+// typedef efi_status (*efi_get_time)(efi_tm *, efi_tmcap *) EFI_ATTRIBUTES;
+// typedef efi_status (*efi_set_time)(efi_tm *) EFI_ATTRIBUTES;
+
+typedef efi_status(*efi_gettime)(struct efi_tm *, struct efi_tmcap *);
+
 void               efi_init(void);
 bool               efi_probe(void);
 paddr_t            efi_getsystblpa(void);
@@ -400,6 +433,7 @@ paddr_t            efi_getcfgtblpa(const struct uuid*);
 void              *efi_getcfgtbl(const struct uuid*);
 
 void               efi_print_esrt(void);
+void               efi_map_runtime(void);
 
 int                efi_rt_init(void);
 int                efi_rt_enter(void);
