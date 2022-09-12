@@ -4843,6 +4843,8 @@ pmap_enter_ma(struct pmap *pmap, vaddr_t va, paddr_t ma, paddr_t pa,
 	bool getptp, samepage, new_embedded;
 	rb_tree_t *tree;
 
+	aprint_normal("PMAP mapping va 0x%lx pa(ma) 0x%lx pa(pa) 0x%lx\n", va, ma, pa);
+
 	KASSERT(pmap_initialized);
 	KASSERT(va < VM_MAX_KERNEL_ADDRESS);
 	KASSERTMSG(va != (vaddr_t)PDP_BASE, "%s: trying to map va=%#"
