@@ -101,6 +101,12 @@ typedef uint64_t uintn;
 typedef uint32_t uintn;
 #endif
 
+#if defined(__i386__) || defined(__x86_64__)
+#define EFI_ATTRIBUTES __attribute__((ms_abi))
+#else
+#define EFI_ATTRIBUTES
+#endif
+
 struct efi_cfgtbl {
        struct uuid     ct_uuid;
        void           *ct_data;
@@ -415,16 +421,10 @@ struct efi_prop_table {
 	uint64_t	memory_protection_attribute;
 };
 
-#if defined(__i386__) || defined(__x86_64__)
-#define EFI_ATTRIBUTES __attribute__((ms_abi))
-#else
-#define EFI_ATTRIBUTES
-#endif
-
 // typedef efi_status (*efi_get_time)(efi_tm *, efi_tmcap *) EFI_ATTRIBUTES;
 // typedef efi_status (*efi_set_time)(efi_tm *) EFI_ATTRIBUTES;
 
-typedef efi_status(*efi_gettime)(struct efi_tm *, struct efi_tmcap *);
+typedef efi_status (*efi_gettime)(struct efi_tm *, struct efi_tmcap *) EFI_ATTRIBUTES;
 
 void               efi_init(void);
 bool               efi_probe(void);
@@ -435,6 +435,8 @@ void              *efi_getcfgtbl(const struct uuid*);
 
 void               efi_print_esrt(void);
 void               efi_map_runtime(void);
+void               efi_map_runtime2(void);
+void               efi_print_memory_map(void);
 
 int                efi_rt_init(void);
 int                efi_rt_enter(void);

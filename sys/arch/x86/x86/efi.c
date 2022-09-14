@@ -64,6 +64,8 @@ bool		efi_uuideq(const struct uuid *, const struct uuid *);
 
 static struct efi_systbl *ST = NULL;
 static struct efi_rt *RT = NULL;
+//static struct efi_rt efi_rtcopy;
+efi_status (*func_ptr)(struct efi_tm *, struct efi_tmcap *);
 
 static kmutex_t efi_lock;
 struct pmap *efi_pm;
@@ -432,16 +434,34 @@ efi_init(void)
 	 * DEBUG START
 	 */
 
-	//mutex_init(&efi_lock, MUTEX_DEFAULT, IPL_HIGH);
+	mutex_init(&efi_lock, MUTEX_DEFAULT, IPL_HIGH);
 
 	aprint_normal("efi: systbl mapped at va %p\n", (void *)ST);
 
 	aprint_normal("RT services at: %p\n", (void *)ST->st_rt);
-	aprint_normal("RT gettime address = %p\n", (void *)((uint64_t)RT + sizeof(struct efi_tblhdr)));
+	//aprint_normal("RT gettime address = %p\n", (void *)((uint64_t)RT + sizeof(struct efi_tblhdr)));
 
 	efi_map_runtime();
+	//efi_map_runtime2();
+
+	//efi_print_memory_map();
+
+	//efi_print_memory_map();
 
 	//efi_rt_init();
+
+	aprint_normal("efi_init DEBUG 1   # #\n");
+
+	//struct efi_rt *rt_ptr = (void *)ST->st_rt;
+
+	//memcpy(&efi_rtcopy, rt_ptr, sizeof(efi_rtcopy));
+	//RT = &efi_rtcopy;
+
+	RT = (struct efi_rt *)ST->st_rt;
+
+	aprint_normal("efi_init DEBUG 2   # #\n");
+
+	efi_print_memory_map();
 
 	aprint_normal("After initialising RT\n");
 
@@ -456,25 +476,45 @@ efi_init(void)
 	// aprint_normal("RT gettime = %p\n", (void *)((uint64_t)RT + sizeof(struct efi_tblhdr)));
 
 	//RT = ST->st_rt;
-	RT = (struct efi_rt *) efi_getva((paddr_t) ST->st_rt);
-	ST->st_rt = RT;
+	struct efi_rt * rt_va_ptr = (struct efi_rt *) efi_getva((paddr_t) ST->st_rt);
+	//ST->st_rt = RT;
 
 	aprint_normal("after allocating virt memory\n");
 	aprint_normal("efi: systbl mapped at va %p\n", (void *)ST);
 	aprint_normal("RT services at: %p\n", (void *)RT);
 	//aprint_normal("RT gettime = %p\n", (void *)RT->rt_gettime);
 
-	efi_status status;
+	
+	/*
+	 * Print memory byte by byte 1
+	 */
+	aprint_normal("ESRT 64 bytes of memory from pointer 0x%lx\n", (uint64_t)rt_va_ptr);
+	unsigned char *r = (unsigned char *)rt_va_ptr;
+	for (int i = 0; i < 64; ++i) {
+		aprint_normal("%p %02x\n", &r[i], r[i]);
+	}
+	aprint_normal("\n");
 
+
+	aprint_normal("efi_init DEBUG 3   # #\n");
+
+	efi_status status;
 	struct efi_tm *efi_debug_time = NULL;
 
+	status = efi_rt_gettime(efi_debug_time, NULL);
+	if (status == 0)
+		aprint_normal("EFI time: %04x-%01x-%01x\n", efi_debug_time->tm_year, efi_debug_time->tm_mon, efi_debug_time->tm_mday);
+
 	//vaddr_t rt_pmap = PMAP_DIRECT_MAP((paddr_t) RT);
-
 	//aprint_normal("RT pmap = %p\n", (void *)rt_pmap);
-
 	//void *gettime_mapped = (void *)efi_getva((paddr_t)RT->rt_gettime);
 
-	//aprint_normal("RT gettime mapped = %p\n", gettime_mapped);
+	vaddr_t efirt_gettime_va = efi_getva((paddr_t) rt_va_ptr->rt_gettime);
+	aprint_normal("RT gettime va = %p\n", (void *)efirt_gettime_va);
+
+	func_ptr = (efi_status (*)(struct efi_tm *, struct efi_tmcap *))efirt_gettime_va;
+
+	aprint_normal("efi_init DEBUG 4   # #\n");
 
 	//efi_gettime get_time_example = (efi_gettime)gettime_mapped;
 
@@ -482,7 +522,10 @@ efi_init(void)
 	//status = get_time_example(efi_debug_time, NULL);
 	//efi_rt_exit();
 
-	status = efi_rt_gettime(efi_debug_time, NULL);
+	status = func_ptr(efi_debug_time, NULL);
+
+
+	aprint_normal("efi_init DEBUG 5   # #\n");
 
 	if (status == 0)
 		aprint_normal("EFI time: %04x-%01x-%01x\n", efi_debug_time->tm_year, efi_debug_time->tm_mon, efi_debug_time->tm_mday);
@@ -542,21 +585,17 @@ efi_print_esrt(void)
 bool
 efi_probe(void)
 {
-
 	return bootmethod_efi;
 }
 
 int
 efi_rt_init(void)
 {
-	aprint_normal("EFI RT init 1  @ @ @ @ @ @ @\n");
 	efi_systbl_pa = efi_getsystblpa();
 
 	const size_t sz = EFI_PAGE_SIZE * 2;
 	vaddr_t va, cva;
 	paddr_t cpa;
-
-	aprint_normal("EFI RT init 2  @ @ @ @ @ @ @\n");
 
 	va = uvm_km_alloc(kernel_map, sz, 0, UVM_KMF_VAONLY);
 	if (va == 0) {
@@ -564,19 +603,13 @@ efi_rt_init(void)
 		return ENOMEM;
 	}
 
-	aprint_normal("EFI RT init 3  @ @ @ @ @ @ @\n");
-
 	for (cva = va, cpa = trunc_page(efi_systbl_pa);
 		 cva < va + sz;
 		 cva += EFI_PAGE_SIZE, cpa += EFI_PAGE_SIZE) {
 			pmap_kenter_pa(cva, cpa, VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE, PMAP_WIRED);
 	}
 
-	aprint_normal("EFI RT init 4  @ @ @ @ @ @ @\n");
-
 	pmap_update(pmap_kernel());
-
-	aprint_normal("EFI RT init 5  @ @ @ @ @ @ @\n");
 
 	ST = (void *)(va + (efi_systbl_pa - trunc_page(efi_systbl_pa)));
 	if (ST->st_hdr.th_sig != EFI_SYSTBL_SIG) {
@@ -585,17 +618,7 @@ efi_rt_init(void)
 		return EINVAL;
 	}
 
-	aprint_normal("EFI RT init 6  @ @ @ @ @ @ @\n");
-
-	//struct efi_rt *rt = ST->st_rt;
 	mutex_init(&efi_lock, MUTEX_DEFAULT, IPL_HIGH);
-
-	aprint_normal("EFI RT init 7  @ @ @ @ @ @ @\n");
-
-	//memcpy(&efi_rtcopy, rt, sizeof(efi_rtcopy));
-	//RT = rt;
-
-	aprint_normal("EFI RT init 8  @ @ @ @ @ @ @\n");
 
 	return 0;
 }
@@ -603,54 +626,30 @@ efi_rt_init(void)
 void
 efi_map_runtime(void)
 {
-	//aprint_normal("EFI map_runtime 1 @ @ @ @ @ @ @\n");
-	//efi_status status;
 	struct efi_memory_descriptor *desc;
 	int i;
 
-	//struct btinfo_memmap *bim = efi_get_e820memmap();
 	struct btinfo_efimemmap *bi_efi_memmap = lookup_bootinfo(BTINFO_EFIMEMMAP);
-
-	//aprint_normal("EFI map_runtime 2 @ @ @ @ @ @ @\n");
-
-	//struct bi_memmap_entry *bi_entry = (struct bi_memmap_entry *)&bim;
-
-	//uint32_t mmap_desc_size = bim->common.len;
-	//uint32_t mmap_size = bi_entry->size;
-	//paddr_t mmap_start = bi_entry->addr;
 
 	uint32_t mmap_desc_size = bi_efi_memmap->size;
 	uint32_t mmap_size = bi_efi_memmap->common.len;
 	uint64_t mmap_start = (uint64_t)bi_efi_memmap->memmap;
 
-
-	//aprint_normal("EFI map_runtime 3 @ @ @ @ @ @ @\n");
-
-	efi_pm = pmap_create();
-
-	//if (bim->num != 1)
-	//	panic("Unsupported version of EFI memory map: %d\n", bim->num);
-
-	//desc = (struct efi_memory_descriptor *)((uint64_t)PMAP_DIRECT_MAP(mmap_start));
-
-	aprint_normal("EFI map_runtime num = %d, desc size = %d, mmap size = %d\n", bi_efi_memmap->num, mmap_desc_size, mmap_size);
-
-	//aprint_normal("EFI map_runtime 4 @ @ @ @ @ @ @\n");
+	aprint_normal("EFI map_runtime num_pages = %d, desc size = %d, mmap size = %d\n", bi_efi_memmap->num, mmap_desc_size, mmap_size);
 
 	desc = (struct efi_memory_descriptor *)mmap_start;
 
-	//aprint_normal("EFI map_runtime 5 @ @ @ @ @ @ @\n");
-
 	for (i = 0; i < bi_efi_memmap->num; i++) {
-		//aprint_normal("EFI map_runtime loop @ @ @ @ @ @ @\n");
-
 		if ((desc->attribute & EFI_MEMORY_RUNTIME) || desc->type == EFI_MD_TYPE_FIRMWARE) {
 			
-		//if (desc->attribute & EFI_MEMORY_RUNTIME) {
 			vaddr_t va = desc->virtual_start;
 			paddr_t pa = desc->physical_start;
+
 			int npages = desc->number_of_pages;
 			vm_prot_t prot = VM_PROT_READ | VM_PROT_WRITE;
+			u_int pmapflags;
+
+			pa = x86_trunc_page(pa);
 
 			aprint_normal("EFI Runtime: 0x%x pa 0x%lx va 0x%lx pages 0x%lx "
 			    "attr 0x%08lx\n", desc->type, desc->physical_start, desc->virtual_start, desc->number_of_pages, desc->attribute);
@@ -658,8 +657,7 @@ efi_map_runtime(void)
 			if (va == 0)
 				va = pa;
 
-			if (desc->type == EFI_MD_TYPE_FIRMWARE)
-				prot |= VM_PROT_EXECUTE;
+			prot |= VM_PROT_EXECUTE;
 
 			if (desc->attribute & EFI_MEMORY_RP)
 				prot &= ~VM_PROT_READ;
@@ -668,17 +666,87 @@ efi_map_runtime(void)
 			if (desc->attribute & EFI_MEMORY_WP)
 				prot &= ~VM_PROT_WRITE;
 
-			va = uvm_km_alloc(kernel_map, 2 * EFI_PAGE_SIZE, 0, UVM_KMF_VAONLY);
+			pmapflags = PMAP_WIRED | PMAP_NOCACHE;
+
+			va = uvm_km_alloc(kernel_map, npages * EFI_PAGE_SIZE, 0, UVM_KMF_WIRED);
+			
+			if (va == 0) {
+				aprint_error("uvm_km_alloc: end of memory");
+				return;
+			}
 
 			while (npages--) {
-				//pmap_enter(efi_pm, va, pa, prot, PMAP_WIRED);
-				pmap_kenter_pa(va, trunc_page(pa), VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE, PMAP_WIRED);
+				pmap_kenter_ma(va, pa, VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE, pmapflags);
 				va += EFI_PAGE_SIZE;
 				pa += EFI_PAGE_SIZE;
 			}
 			
 			pmap_update(pmap_kernel());
-			//pmap_update(efi_pm);
+		}
+		else {
+			aprint_normal("@ EFI Runtime: 0x%x pa 0x%lx va 0x%lx pages 0x%lx "
+			    "attr 0x%08lx\n", desc->type, desc->physical_start, desc->virtual_start, desc->number_of_pages, desc->attribute);
+		}
+		desc = NextMemoryDescriptor(desc, mmap_desc_size);
+	}
+
+	pmap_update(pmap_kernel());
+}
+
+void
+efi_map_runtime2(void)
+{
+	struct efi_memory_descriptor *desc;
+	int i;
+
+	struct btinfo_efimemmap *bi_efi_memmap = lookup_bootinfo(BTINFO_EFIMEMMAP);
+
+	uint32_t mmap_desc_size = bi_efi_memmap->size;
+	uint64_t mmap_start = (uint64_t)bi_efi_memmap->memmap;
+
+	desc = (struct efi_memory_descriptor *)mmap_start;
+
+	for (i = 0; i < bi_efi_memmap->num; i++) {
+		if ((desc->attribute & EFI_MEMORY_RUNTIME) || desc->type == EFI_MD_TYPE_FIRMWARE) {
+			vaddr_t va = desc->virtual_start;
+			paddr_t pa = desc->physical_start;
+
+			aprint_normal("EFI Runtime: 0x%x pa 0x%lx va 0x%lx pages 0x%lx "
+			    "attr 0x%08lx\n", desc->type, desc->physical_start, desc->virtual_start, desc->number_of_pages, desc->attribute);
+
+			_x86_memio_map(x86_bus_space_mem, pa, (bus_size_t) EFI_PAGE_SIZE, 0, (bus_space_handle_t *)&va); // TODO try 1 * PAGE_SIZE
+		}
+
+		desc = NextMemoryDescriptor(desc, mmap_desc_size);
+	}
+}
+
+void
+efi_print_memory_map(void)
+{
+	struct efi_memory_descriptor *desc ;
+	int i;
+
+	struct btinfo_efimemmap *bi_efi_memmap = lookup_bootinfo(BTINFO_EFIMEMMAP);
+
+	uint32_t mmap_desc_size = bi_efi_memmap->size;
+	//uint32_t mmap_size = bi_efi_memmap->common.len;
+	uint64_t mmap_start = (uint64_t)bi_efi_memmap->memmap;
+
+	desc = (struct efi_memory_descriptor *)mmap_start;
+
+	for (i = 0; i < bi_efi_memmap->num; i++) {
+		if ((desc->attribute & EFI_MEMORY_RUNTIME) || desc->type == EFI_MD_TYPE_FIRMWARE) {
+			vaddr_t va = desc->virtual_start;
+			//paddr_t pa = desc->physical_start;
+			//int npages = desc->number_of_pages;
+			//vm_prot_t prot = VM_PROT_READ | VM_PROT_WRITE;
+
+			aprint_normal("EFI Runtime: 0x%x pa 0x%lx va 0x%lx pages 0x%lx "
+			    "attr 0x%08lx\n", desc->type, desc->physical_start, desc->virtual_start, desc->number_of_pages, desc->attribute);
+
+			va = uvm_km_alloc(kernel_map, 2 * EFI_PAGE_SIZE, 0, UVM_KMF_VAONLY);
+			desc->virtual_start = va;
 		}
 		else {
 			aprint_normal("@ EFI Runtime: 0x%x pa 0x%lx va 0x%lx pages 0x%lx "
@@ -687,19 +755,6 @@ efi_map_runtime(void)
 
 		desc = NextMemoryDescriptor(desc, mmap_desc_size);
 	}
-
-	aprint_normal("EFI runtime: end debug\n");
-
-	//pmap_update(efi_pm);
-	
-	pmap_update(pmap_kernel());
-
-	// desc = efi_memory_get_map(&NoEntries, &MapKey, &DescriptorSize,
-	//     &DescriptorVersion, true);
-
-	// struct btinfo_memmap *mmap = efi_get_e820memmap();
-
-
 }
 
 void
@@ -743,18 +798,30 @@ efi_rt_enter(void)
 	if (RT == NULL)
 		return ENXIO;
 
+	aprint_normal("efi_rt_enter DEBUG 1  @ @ @\n");
+
 	mutex_enter(&efi_lock);
 
+	aprint_normal("efi_rt_enter DEBUG 2  @ @ @ \n");
 
 	kpreempt_disable();
 	struct lwp * const l = curlwp;
 
+	aprint_normal("efi_rt_enter DEBUG 3  @ @ @ \n");
+
 	if ((l->l_flag & LW_SYSTEM) == 0)
 		pmap_deactivate(l);
 
+	aprint_normal("efi_rt_enter DEBUG 4  @ @ @ \n");
+
 	x86_disable_intr();
 	//lcr3(pmap_pdirpa(pmap_kernel(), 0));
+	aprint_normal("efi_rt_enter DEBUG 5  @ @ @ \n");
+
 	fpu_kern_enter();
+
+	aprint_normal("efi_rt_enter DEBUG 6  @ @ @ \n");
+
 	return 0;
 }
 
@@ -771,9 +838,14 @@ efi_rt_gettime(struct efi_tm *tm, struct efi_tmcap *tmcap)
 {
 	efi_status status;
 
-	if (RT == NULL || RT->rt_gettime == NULL)
-		return ENXIO;
+	aprint_normal("rt_gettime\n");
 
+	/*
+	 *	if (RT == NULL || RT->rt_gettime == NULL)
+	 *	return ENXIO;
+	 */
+
+	aprint_normal("entering efirt\n");
 	efi_rt_enter();
 	aprint_normal("efirt entered\n");
 	status = RT->rt_gettime(tm, tmcap);

@@ -434,7 +434,7 @@ x86_mem_add_mapping(bus_addr_t bpa, bus_size_t size,
 	pa = x86_trunc_page(bpa);
 	endpa = x86_round_page(bpa + size);
 
-	pmapflags = PMAP_NOCACHE;
+	pmapflags = PMAP_NOCACHE | PMAP_WIRED;
 	if ((flags & BUS_SPACE_MAP_CACHEABLE) != 0)
 		pmapflags = 0;
 	else if (flags & BUS_SPACE_MAP_PREFETCHABLE)
@@ -460,7 +460,7 @@ x86_mem_add_mapping(bus_addr_t bpa, bus_size_t size,
 	*bshp = (bus_space_handle_t)(sva + (bpa & PGOFSET));
 
 	for (va = sva; pa != endpa; pa += PAGE_SIZE, va += PAGE_SIZE) {
-		pmap_kenter_ma(va, pa, VM_PROT_READ | VM_PROT_WRITE, pmapflags);
+		pmap_kenter_ma(va, pa, VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE, pmapflags);
 	}
 	pmap_update(pmap_kernel());
 

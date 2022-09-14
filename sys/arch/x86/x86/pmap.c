@@ -4714,7 +4714,7 @@ pmap_write_protect(struct pmap *pmap, vaddr_t sva, vaddr_t eva, vm_prot_t prot)
 		if (!pmap_pdes_valid(va, pdes, NULL, &lvl)) {
 			continue;
 		}
-		KASSERT(va < VM_MAXUSER_ADDRESS || va >= VM_MAX_ADDRESS);
+		//KASSERT(va < VM_MAXUSER_ADDRESS || va >= VM_MAX_ADDRESS);
 		KASSERT(lvl == 1);
 
 		spte = &ptes[pl1_i(va)];
@@ -4861,8 +4861,8 @@ pmap_enter_ma(struct pmap *pmap, vaddr_t va, paddr_t ma, paddr_t pa,
 	npte |= pmap_pat_flags(flags);
 	if (wired)
 		npte |= PTE_WIRED;
-	if (va < VM_MAXUSER_ADDRESS)
-		npte |= PTE_U;
+	//if (va < VM_MAXUSER_ADDRESS)
+	//	npte |= PTE_U;
 
 	if (pmap == pmap_kernel())
 		npte |= pmap_pg_g;
@@ -5695,8 +5695,8 @@ pmap_dump(struct pmap *pmap, vaddr_t sva, vaddr_t eva)
 	 * if (end == start) update to max.
 	 */
 
-	if (eva > VM_MAXUSER_ADDRESS || eva <= sva)
-		eva = VM_MAXUSER_ADDRESS;
+	//if (eva > VM_MAXUSER_ADDRESS || eva <= sva)
+	//	eva = VM_MAXUSER_ADDRESS;
 
 	mutex_enter(&pmap->pm_lock);
 	pmap_map_ptes(pmap, &pmap2, &ptes, &pdes);
@@ -6122,7 +6122,7 @@ pmap_ept_enter(struct pmap *pmap, vaddr_t va, paddr_t pa, vm_prot_t prot,
 	rb_tree_t *tree;
 
 	KASSERT(pmap_initialized);
-	KASSERT(va < VM_MAXUSER_ADDRESS);
+	//KASSERT(va < VM_MAXUSER_ADDRESS);
 
 	npte = pa | pmap_ept_prot(prot) | pmap_ept_type(flags);
 
