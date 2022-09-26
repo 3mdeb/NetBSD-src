@@ -48,6 +48,13 @@
 #define	EFI_VARIABLE_APPEND_WRITE				0x00000040
 #define	EFI_VARIABLE_ENHANCED_AUTHENTICATED_ACCESS		0x00000080
 
+struct efi_get_table_ioc {
+	void *		buf;
+	struct uuid	uuid;
+	size_t		table_len;
+	size_t		buf_len;
+};
+
 struct efi_var_ioc {
 	uint16_t *	name;		/* vendor's variable name */
 	size_t		namesize;	/* size in bytes of the name buffer */
@@ -57,6 +64,7 @@ struct efi_var_ioc {
 	size_t		datasize;	/* size in bytes of the data buffer */
 };
 
+#define	EFIIOC_GET_TABLE	_IOWR('e', 1, struct efi_get_table_ioc)
 #define	EFIIOC_VAR_GET		_IOWR('e', 4, struct efi_var_ioc)
 #define	EFIIOC_VAR_NEXT		_IOWR('e', 5, struct efi_var_ioc)
 #define	EFIIOC_VAR_SET		_IOWR('e', 7, struct efi_var_ioc)

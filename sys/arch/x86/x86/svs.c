@@ -575,6 +575,7 @@ svs_pmap_sync(struct pmap *pmap, int index)
 
 	KASSERT(pmap != NULL);
 	KASSERT(pmap != pmap_kernel());
+	KASSERT(pmap_is_user(pmap));
 	KASSERT(mutex_owned(&pmap->pm_lock));
 	KASSERT(kpreempt_disabled());
 	KASSERT(index < PDIR_SLOT_USERLIM);
@@ -699,6 +700,7 @@ svs_pdir_switch(struct pmap *pmap)
 
 	KASSERT(kpreempt_disabled());
 	KASSERT(pmap != pmap_kernel());
+	KASSERT(pmap_is_user(pmap));
 
 	/* Update the info in the UTLS page */
 	utls = (struct svs_utls *)ci->ci_svs_utls;

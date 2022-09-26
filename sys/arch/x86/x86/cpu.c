@@ -1434,7 +1434,7 @@ void
 cpu_load_pmap(struct pmap *pmap, struct pmap *oldpmap)
 {
 #ifdef SVS
-	if (svs_enabled) {
+	if (svs_enabled && pmap_is_user(pmap)) {
 		svs_pdir_switch(pmap);
 	}
 #endif

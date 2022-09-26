@@ -29,16 +29,20 @@
 #ifndef _DEV_EFIVAR_H
 #define _DEV_EFIVAR_H
 
+#include <sys/uuid.h>
+#include <sys/types.h>
+
 #include <machine/efi.h>
 
 struct efi_ops {
 	efi_status	(*efi_gettime)(struct efi_tm *, struct efi_tmcap *);
 	efi_status	(*efi_settime)(struct efi_tm *);
 	efi_status	(*efi_getvar)(uint16_t *, struct uuid *, uint32_t *,
-				      u_long *, void *);
+			    u_long *, void *);
 	efi_status	(*efi_setvar)(uint16_t *, struct uuid *, uint32_t,
-				      u_long, void *);
+			    u_long, void *);
 	efi_status	(*efi_nextvar)(u_long *, uint16_t *, struct uuid *);
+	efi_status	(*efi_gettab)(const struct uuid *, uint64_t *);
 };
 
 void	efi_register_ops(const struct efi_ops *);
