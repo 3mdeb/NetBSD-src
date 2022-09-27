@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "bootinfo.h": "c",
+        "efiboot.h": "c",
+        "efiboot_machdep.h": "c",
+        "efilib.h": "c",
+        "efi.h": "c"
+    },
+    "C_Cpp.dimInactiveRegions": false
+}

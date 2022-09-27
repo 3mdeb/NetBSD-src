@@ -105,6 +105,10 @@ xbd*		at xenbus?		# Xen virtual block device
 #pseudo-device  xvif
 #pseudo-device  xbdback
 
+options 	EFI_RUNTIME
+options 	_KERNEL_OPT
+
+pseudo-device	efi		# /dev/efi
 
 # Alternate buffer queue strategies for better responsiveness under high
 # disk I/O load.

@@ -55,6 +55,7 @@ const struct uuid EFI_UUID_ACPI20 = EFI_TABLE_ACPI20;
 const struct uuid EFI_UUID_ACPI10 = EFI_TABLE_ACPI10;
 const struct uuid EFI_UUID_SMBIOS = EFI_TABLE_SMBIOS;
 const struct uuid EFI_UUID_SMBIOS3 = EFI_TABLE_SMBIOS3;
+const struct uuid EFI_UUID_ESRT = EFI_TABLE_ESRT;
 
 static vaddr_t	efi_getva(paddr_t);
 static void	efi_relva(paddr_t, vaddr_t);
@@ -62,6 +63,8 @@ struct efi_cfgtbl *efi_getcfgtblhead(void);
 void		efi_aprintcfgtbl(void);
 void		efi_aprintuuid(const struct uuid *);
 bool		efi_uuideq(const struct uuid *, const struct uuid *);
+
+struct sysctllog **clog = NULL;
 
 static bool efi_is32x64 = false;
 static paddr_t efi_systbl_pa;
@@ -89,6 +92,10 @@ static struct efi_rt efi_rt __read_mostly;
 static struct efi_ops efi_runtime_ops __read_mostly;
 
 static void efi_runtime_init(void);
+//static void efi_runtime_test(void);
+
+#define	EFI_UNSUPPORTED		EFIERR(3)
+#define	EFI_DEVICE_ERROR	EFIERR(7)
 
 #endif
 
@@ -157,6 +164,8 @@ efi_aprintuuid(const struct uuid * uuid)
 		aprint_debug(" SMBIOS");
 	} else if (efi_uuideq(uuid, &EFI_UUID_SMBIOS3)) {
 		aprint_debug(" SMBIOS3");
+	} else if (efi_uuideq(uuid, &EFI_UUID_ESRT)) {
+		aprint_debug(" ESRT");
 	}
 }
 
@@ -436,6 +445,8 @@ efi_init(void)
 
 #ifdef EFI_RUNTIME
 	efi_runtime_init();
+	efi_sysctl_init(clog);
+	//efi_runtime_test();
 #endif
 }
 
@@ -578,6 +589,134 @@ efi_get_e820memmap(void)
 	return &efi_e820memmap.bim;
 }
 
+void
+efi_sysctl_init_syslog(struct sysctllog **efi_syslog)
+{
+	clog = efi_syslog;
+}
+
+void
+efi_sysctl_init(struct sysctllog **efi_syslog)
+{
+	const struct sysctlnode *efi_rnode;
+
+	//int rv;
+
+	aprint_normal("sysctl_init debug 0\n");
+
+	const struct uuid esrt_uuid = (const struct uuid) EFI_TABLE_ESRT;
+
+	struct efi_esrt_table *esrt = NULL;
+	struct efi_esrt_entry_v1 *esrt_entries;
+
+	esrt = (struct efi_esrt_table *) efi_getcfgtbl(&esrt_uuid);
+
+	if (esrt == NULL || esrt == 0) {
+		aprint_error("%s: Couldn't find esrt on the system\n", __func__);
+		return;
+	}
+
+	aprint_normal("sysctl_init debug 1\n");
+
+	/*
+	 * Root node
+	 */
+	efi_rnode = NULL;
+	sysctl_createv(efi_syslog, 0, // sysctllog and cflags=0(not used)
+					NULL, &efi_rnode, // root and child node
+					CTLFLAG_PERMANENT, // can never be removed
+					CTLTYPE_NODE,	// create a new node
+					"esrt",		// name
+					NULL,			// description
+					NULL, 0, NULL, 0,
+					CTL_MACHDEP, CTL_CREATE); // create a new node
+	aprint_normal("sysctl_init debug 2\n");
+
+	/*
+	 * resource count
+	 */
+	sysctl_createv(efi_syslog, 0, &efi_rnode, NULL,
+		       CTLFLAG_PERMANENT,
+		       CTLTYPE_INT, "resource_count",
+		       SYSCTL_DESCR("TODO DESC"),
+		       NULL, 0, &(esrt->fw_resource_count), 0,
+		       CTL_CREATE, CTL_EOL);
+
+	aprint_normal("sysctl_init debug 3\n");
+
+	/*
+	 * resource count max
+	 */
+	sysctl_createv(efi_syslog, 0, &efi_rnode, NULL,
+		       CTLFLAG_PERMANENT,
+		       CTLTYPE_INT, "resource_count_max",
+		       SYSCTL_DESCR("TODO DESC"),
+		       NULL, 0, &(esrt->fw_resource_count_max), 0,
+		       CTL_CREATE, CTL_EOL);
+
+	/*
+	 * resource version
+	 */
+	sysctl_createv(efi_syslog, 0, &efi_rnode, NULL,
+		       CTLFLAG_PERMANENT,
+		       CTLTYPE_QUAD, "resource_version",
+		       SYSCTL_DESCR("TODO DESC"),
+		       NULL, 0, &(esrt->fw_resource_version), 0,
+		       CTL_CREATE, CTL_EOL);
+
+
+	// /*
+	//  * TEST: entry rnode
+	//  */
+	// const struct sysctlnode *esrt_entry_rnode = NULL;
+	// rv = sysctl_createv(efi_syslog, 0, NULL, &esrt_entry_rnode,
+	// 	       CTLFLAG_PERMANENT,
+	// 	       CTLTYPE_NODE, "entry0", NULL,
+	// 	       NULL, 0, NULL, 0,
+	// 	       CTL_HW, CTL_CREATE, CTL_EOL);
+	// if (rv != 0)
+	// 	goto fail;
+
+
+	esrt_entries = (struct efi_esrt_entry_v1 *) esrt->entries;
+	for (int i = 0; i < esrt->fw_resource_count; ++i) {
+		const struct efi_esrt_entry_v1 *e = &esrt_entries[i];
+
+		char *esrt_entry_name = NULL;
+		char *esrt_entry_uuid = NULL;
+
+		esrt_entry_name = kmem_asprintf("entry_%d", i); // TODO change to sprintf and import stdio.h
+
+		esrt_entry_uuid = kmem_asprintf("%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+		e->fw_class.time_low,
+		e->fw_class.time_mid,
+		e->fw_class.time_hi_and_version,
+		e->fw_class.clock_seq_hi_and_reserved, e->fw_class.clock_seq_low,
+		e->fw_class.node[0], e->fw_class.node[1], e->fw_class.node[2],
+		e->fw_class.node[3], e->fw_class.node[4], e->fw_class.node[5]);
+
+		const struct sysctlnode *esrt_entry_rnode = NULL;
+		sysctl_createv(efi_syslog, 0, &efi_rnode, &esrt_entry_rnode,
+		       CTLFLAG_PERMANENT,
+		       CTLTYPE_NODE, esrt_entry_name, NULL,
+		       NULL, 0, NULL, 0,
+		       CTL_MACHDEP, CTL_CREATE, CTL_EOL); // TODO this null may be removed?
+
+		/*
+		 * resource version
+		 */
+		sysctl_createv(efi_syslog, 0, &esrt_entry_rnode, NULL,
+		       CTLFLAG_PERMANENT,
+		       CTLTYPE_STRING, "fw_class",
+		       SYSCTL_DESCR("TODO DESC"),
+		       NULL, 0, esrt_entry_uuid, 0,
+		       CTL_CREATE, CTL_EOL);
+
+		kmem_strfree(esrt_entry_name);
+		kmem_strfree(esrt_entry_uuid);
+	}
+}
+
 #ifdef EFI_RUNTIME
 
 /*
@@ -589,8 +728,6 @@ efi_get_e820memmap(void)
 #define	EFIERR(x)	(0x80000000ul | (x))
 #endif
 
-#define	EFI_UNSUPPORTED		EFIERR(3)
-#define	EFI_DEVICE_ERROR	EFIERR(7)
 
 /*
  * efi_runtime_init()
@@ -780,12 +917,15 @@ efi_runtime_init(void)
 	 */
 	efi_register_ops(&efi_runtime_ops);
 
+	aprint_debug("%s: successful efi memmap\n", __func__);
+
 	return;
 
 fail:	/*
 	 * On failure, deactivate and destroy efi_runtime_pmap -- no
 	 * runtime services.
 	 */
+	aprint_debug("%s: failed efi memmap\n", __func__);
 	pmap_deactivate_sync(efi_runtime_pmap, cookie);
 	pmap_destroy(efi_runtime_pmap);
 	efi_runtime_pmap = NULL;
@@ -849,8 +989,11 @@ static void
 efi_runtime_exit(struct efi_runtime_cookie *cookie)
 {
 
+	aprint_normal("runtime_exit DEBUG 1\n");
 	pmap_deactivate_sync(efi_runtime_pmap, cookie->erc_pmap_cookie);
+	aprint_normal("runtime_exit DEBUG 2\n");
 	fpu_kern_leave();
+	aprint_normal("runtime_exit DEBUG 3\n");
 	mutex_exit(&efi_runtime_lock);
 }
 
@@ -869,9 +1012,11 @@ efi_runtime_gettime(struct efi_tm *tm, struct efi_tmcap *tmcap)
 		return EFI_UNSUPPORTED;
 
 	efi_runtime_enter(&cookie);
+	aprint_normal("runtime_gettime DEBUG 2\n");
 	status = efi_rt.rt_gettime(tm, tmcap);
+	aprint_normal("runtime_gettime DEBUG 3\n");
 	efi_runtime_exit(&cookie);
-
+	
 	return status;
 }
 
@@ -963,12 +1108,46 @@ efi_runtime_setvar(efi_char *name, struct uuid *vendor, uint32_t attrib,
 	return status;
 }
 
+efi_status
+efi_gettable(struct uuid *uuid, void **ptr)
+{
+	efi_status status;
+
+	void *table = efi_getcfgtbl(uuid);
+
+	if (ptr == NULL)
+		status = 5; // TODO proper error code for out-of-memory
+
+	ptr = &table;
+
+	return status;
+}
+
 static struct efi_ops efi_runtime_ops = {
+	.efi_gettable = efi_gettable,
 	.efi_gettime = efi_runtime_gettime,
 	.efi_settime = efi_runtime_settime,
 	.efi_getvar = efi_runtime_getvar,
 	.efi_setvar = efi_runtime_setvar,
 	.efi_nextvar = efi_runtime_nextvar,
 };
+
+// /*
+//  * debug
+//  */
+// static void
+// efi_runtime_test(void)
+// {
+// 	efi_status status;
+// 	struct efi_tm *efi_debug_time = NULL;
+
+// 	status = efi_runtime_gettime(efi_debug_time, NULL);
+// 	if (status == 0) {
+// 		aprint_normal("EFI RT time = %04x-%01x-%01x\n", efi_debug_time->tm_year, efi_debug_time->tm_mon, efi_debug_time->tm_mday);
+// 	}
+// 	else if (status == EFI_UNSUPPORTED) {
+// 		aprint_normal("efi runtime unsupported!\n");
+// 	}
+// }
 
 #endif	/* EFI_RUNTIME */

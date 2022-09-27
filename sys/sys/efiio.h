@@ -57,6 +57,23 @@ struct efi_var_ioc {
 	size_t		datasize;	/* size in bytes of the data buffer */
 };
 
+struct efi_time_ioc {
+	uint16_t	tm_year;		/* 1998 - 20XX */
+	uint8_t		tm_mon;			/* 1 - 12 */
+	uint8_t		tm_mday;		/* 1 - 31 */
+};
+
+struct efi_table_ioc
+{
+	void *buf;		/* Pointer to userspace buffer */
+	struct uuid uuid;	/* UUID to look up */
+	size_t table_len;	/* Table size */
+	size_t buf_len;		/* Size of the buffer */
+};
+
+#define EFIIOC_TABLE_GET	_IOWR('e', 1, struct efi_table_ioc)
+#define EFIIOC_TIME_GET		_IOWR('e', 2, struct efi_time_ioc)
+#define EFIIOC_TIME_SET		_IOWR('e', 3, struct efi_time_ioc)
 #define	EFIIOC_VAR_GET		_IOWR('e', 4, struct efi_var_ioc)
 #define	EFIIOC_VAR_NEXT		_IOWR('e', 5, struct efi_var_ioc)
 #define	EFIIOC_VAR_SET		_IOWR('e', 7, struct efi_var_ioc)

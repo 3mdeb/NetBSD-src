@@ -1471,6 +1471,8 @@ SYSCTL_SETUP(sysctl_machdep_setup, "sysctl machdep subtree setup")
 		       NULL, 0, &x86_user_ldt_enabled, 0,
 		       CTL_MACHDEP, CTL_CREATE, CTL_EOL);
 
+	efi_sysctl_init_syslog(clog);
+
 #ifndef XENPV
 	void sysctl_speculation_init(struct sysctllog **);
 	sysctl_speculation_init(clog);

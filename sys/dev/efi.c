@@ -147,6 +147,38 @@ efi_status_to_error(efi_status status)
 }
 
 static int
+efi_ioctl_table_get(struct efi_table_ioc* var)
+{
+	int error = 0;
+
+	efi_ops->efi_gettable(&var->uuid, &var->buf);
+
+	
+
+	return 0;
+}
+
+static int
+efi_ioctl_time_get(struct efi_time_ioc* var)
+{
+	efi_status status;
+
+	struct efi_tm *tm = NULL;
+	struct efi_tmcap *tmcap = NULL;
+
+	status = efi_ops->efi_gettime(tm, tmcap);
+
+	if (status == 0) {
+		aprint_normal("EFI RT time = %04x-%01x-%01x\n", tm->tm_year, tm->tm_mon, tm->tm_mday);
+	}
+	else if (status == EFI_UNSUPPORTED) {
+		aprint_normal("efi runtime unsupported!\n");
+	}
+
+	return 0;
+}
+
+static int
 efi_ioctl_var_get(struct efi_var_ioc *var)
 {
 	uint16_t *namebuf;
@@ -286,6 +318,10 @@ efi_ioctl(dev_t dev, u_long cmd, void *data, int flags, struct lwp *l)
 	KASSERT(efi_ops != NULL);
 
 	switch (cmd) {
+	case EFIIOC_TABLE_GET:
+		return efi_ioctl_table_get(data);
+	case EFIIOC_TIME_GET:
+		return efi_ioctl_time_get(data);
 	case EFIIOC_VAR_GET:
 		return efi_ioctl_var_get(data);
 	case EFIIOC_VAR_NEXT:
@@ -307,4 +343,6 @@ efi_register_ops(const struct efi_ops *ops)
 void
 efiattach(int count)
 {
+	aprint_debug("EFI: device attached at /dev/efi\n");
+	//efi_ioctl_time_get(NULL);
 }
