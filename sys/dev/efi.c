@@ -235,33 +235,33 @@ efi_map_pa(uint64_t addr, bool *directp)
 	return (void *)va;
 }
 
-// static void
-// efi_unmap(void *ptr, bool direct)
-// {
-// 	vaddr_t va = (vaddr_t)ptr;
+static void
+efi_unmap(void *ptr, bool direct)
+{
+	vaddr_t va = (vaddr_t)ptr;
 
-// 	/*
-// 	 * If it was direct-mapped, nothing to do here.
-// 	 */
-// 	if (direct)
-// 		return;
+	/*
+	 * If it was direct-mapped, nothing to do here.
+	 */
+	if (direct)
+		return;
 
-// 	/*
-// 	 * First remove the mapping from the kernel pmap so that it can
-// 	 * be reused, before we free the kva and let anyone else reuse
-// 	 * it.
-// 	 */
-// 	pmap_kremove(va, PAGE_SIZE);
-// 	pmap_update(pmap_kernel());
+	/*
+	 * First remove the mapping from the kernel pmap so that it can
+	 * be reused, before we free the kva and let anyone else reuse
+	 * it.
+	 */
+	pmap_kremove(va, PAGE_SIZE);
+	pmap_update(pmap_kernel());
 
-// 	/*
-// 	 * Next free the kva so it can be reused by someone else.
-// 	 */
-// 	uvm_km_free(kernel_map, va, PAGE_SIZE, UVM_KMF_VAONLY);
-// }
+	/*
+	 * Next free the kva so it can be reused by someone else.
+	 */
+	uvm_km_free(kernel_map, va, PAGE_SIZE, UVM_KMF_VAONLY);
+}
 
 static int
-efi_ioctl_got_table(struct efi_get_table_ioc *ioc, void *ptr, size_t len)
+efi_ioctl_copyout_table(struct efi_get_table_ioc *ioc, void *ptr, size_t len)
 {
 
 	/*
@@ -269,20 +269,20 @@ efi_ioctl_got_table(struct efi_get_table_ioc *ioc, void *ptr, size_t len)
 	 */
 	ioc->table_len = len;
 
-	aprint_normal("DEBUG ioctl_got_table 1\n");
+	aprint_normal("DEBUG ioctl_copyout_table 1\n");
 
-	aprint_normal("DEBUG ioctl_got_table ioc->buf address = %p\n", ioc->buf);
-	aprint_normal("DEBUG ioctl_got_table userspace ptr address = %p\n", ptr);
-	aprint_normal("DEBUG ioctl_got_table buf len = %ld table len = %ld\n", ioc->buf_len, len);
+	aprint_normal("DEBUG ioctl_copyout_table ioc->buf address = %p\n", ioc->buf);
+	aprint_normal("DEBUG ioctl_copyout_table userspace ptr address = %p\n", ptr);
+	aprint_normal("DEBUG ioctl_copyout_table buf len = %ld table len = %ld\n", ioc->buf_len, len);
 
 	/*
 	 * Copy out as much as we can into the user's allocated buffer.
 	 */
-	int error = copyout(ioc->buf, ptr, MIN(ioc->buf_len, len));
+	int error = copyout(ioc->buf, ptr, MIN(ioc->buf_len, len)); // TODO switch arguments around
 
-	aprint_normal("DEBUG ioctl_got_table error = %d\n", error);
+	aprint_normal("DEBUG ioctl_copyout_table error = %d\n", error);
 
-	aprint_normal("DEBUG ioctl_got_table 2\n");
+	aprint_normal("DEBUG ioctl_copyout_table 2\n");
 
 	return error;
 }
@@ -327,7 +327,11 @@ efi_ioctl_get_esrt(struct efi_get_table_ioc *ioc,
 	    Entries[tab->FwResourceCount]);
 	aprint_normal("DEBUG ioctl_get_esrt len = %ld\n", len);
 	aprint_normal("DEBUG ioctl_get_esrt 4\n");
-	return efi_ioctl_got_table(ioc, tab, len);
+
+	if (ioc->buf == NULL && len != 0)
+		return 0; // success!, return just the table length for now
+
+	return efi_ioctl_copyout_table(ioc, tab, len);
 }
 
 static int
@@ -382,7 +386,7 @@ efi_ioctl_get_table(struct efi_get_table_ioc *ioc)
 			return ENOENT;
 		error = efi_ioctl_get_esrt(ioc, tab);
 		aprint_normal("DEBUG ioctl_get_table 3 = attempted copyout\n");
-		//efi_unmap(tab, direct);
+		efi_unmap(tab, direct);
 	} else {
 		error = ENOENT;
 		aprint_normal("DEBUG ioctl_get_table 4 = table is not esrt\n");

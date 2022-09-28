@@ -179,8 +179,8 @@ main(int argc, char **argv)
 
 	table.uuid = efi_table_ops[efi_idx].uuid;
 	if (ioctl(efi_fd, EFIIOC_TABLE_GET, &table) == -1) {
-		printf("1st efiioc table get call failed\n");
-		fail("1st efiioc table get call failed");
+		printf("1st efiioc_table_get call failed\n");
+		fail("1st efiioc_table_get call failed");
 	}
 
 	printf("DEBUG efitable 5\n");
