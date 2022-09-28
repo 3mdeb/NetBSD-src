@@ -177,6 +177,9 @@ main(int argc, char **argv)
 
 	printf("DEBUG efitable 4\n");
 
+	table.buf = malloc(56); // sizeof esrt with one entry
+	table.buf_len = 56;
+
 	table.uuid = efi_table_ops[efi_idx].uuid;
 	if (ioctl(efi_fd, EFIIOC_TABLE_GET, &table) == -1) {
 		printf("1st efiioc_table_get call failed\n");

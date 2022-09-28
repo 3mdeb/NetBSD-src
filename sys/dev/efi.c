@@ -272,13 +272,13 @@ efi_ioctl_copyout_table(struct efi_get_table_ioc *ioc, void *ptr, size_t len)
 	aprint_normal("DEBUG ioctl_copyout_table 1\n");
 
 	aprint_normal("DEBUG ioctl_copyout_table ioc->buf address = %p\n", ioc->buf);
-	aprint_normal("DEBUG ioctl_copyout_table userspace ptr address = %p\n", ptr);
+	aprint_normal("DEBUG ioctl_copyout_table kernelspace ptr address = %p\n", ptr);
 	aprint_normal("DEBUG ioctl_copyout_table buf len = %ld table len = %ld\n", ioc->buf_len, len);
 
 	/*
 	 * Copy out as much as we can into the user's allocated buffer.
 	 */
-	int error = copyout(ioc->buf, ptr, MIN(ioc->buf_len, len)); // TODO switch arguments around
+	int error = copyout(ptr, ioc->buf, MIN(ioc->buf_len, len)); // TODO switch arguments around
 
 	aprint_normal("DEBUG ioctl_copyout_table error = %d\n", error);
 
@@ -328,8 +328,8 @@ efi_ioctl_get_esrt(struct efi_get_table_ioc *ioc,
 	aprint_normal("DEBUG ioctl_get_esrt len = %ld\n", len);
 	aprint_normal("DEBUG ioctl_get_esrt 4\n");
 
-	if (ioc->buf == NULL && len != 0)
-		return 0; // success!, return just the table length for now
+	//if (ioc->buf == NULL && len != 0)
+	//	return 0; // success!, return just the table length for now
 
 	return efi_ioctl_copyout_table(ioc, tab, len);
 }
