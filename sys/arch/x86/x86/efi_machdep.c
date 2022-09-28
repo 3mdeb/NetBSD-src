@@ -75,7 +75,7 @@ static struct efi_e820memmap {
 
 #ifdef EFI_RUNTIME
 
-#define	EFI_SUCCESS		EFIERR(0)
+#define	EFI_SUCCESS		0
 #define	EFI_NOT_FOUND	EFIERR(14)
 
 #include <dev/efivar.h>

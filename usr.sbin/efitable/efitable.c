@@ -178,10 +178,13 @@ main(int argc, char **argv)
 	printf("DEBUG efitable 4\n");
 
 	table.uuid = efi_table_ops[efi_idx].uuid;
-	if (ioctl(efi_fd, EFIIOC_TABLE_GET, &table) == -1)
-		fail(NULL);
+	if (ioctl(efi_fd, EFIIOC_TABLE_GET, &table) == -1) {
+		printf("1st efiioc table get call failed\n");
+		fail("1st efiioc table get call failed");
+	}
 
 	printf("DEBUG efitable 5\n");
+	printf("DEBUG efitable table len = %ld\n", table.table_len);
 
 	table.buf = malloc(table.table_len);
 	table.buf_len = table.table_len;
@@ -189,7 +192,7 @@ main(int argc, char **argv)
 	printf("DEBUG efitable 6\n");
 
 	if (ioctl(efi_fd, EFIIOC_TABLE_GET, &table) == -1)
-		fail(NULL);
+		fail("2nd efiioc table get call failed");
 	close(efi_fd);
 
 	printf("DEBUG efitable 7\n");

@@ -235,30 +235,30 @@ efi_map_pa(uint64_t addr, bool *directp)
 	return (void *)va;
 }
 
-static void
-efi_unmap(void *ptr, bool direct)
-{
-	vaddr_t va = (vaddr_t)ptr;
+// static void
+// efi_unmap(void *ptr, bool direct)
+// {
+// 	vaddr_t va = (vaddr_t)ptr;
 
-	/*
-	 * If it was direct-mapped, nothing to do here.
-	 */
-	if (direct)
-		return;
+// 	/*
+// 	 * If it was direct-mapped, nothing to do here.
+// 	 */
+// 	if (direct)
+// 		return;
 
-	/*
-	 * First remove the mapping from the kernel pmap so that it can
-	 * be reused, before we free the kva and let anyone else reuse
-	 * it.
-	 */
-	pmap_kremove(va, PAGE_SIZE);
-	pmap_update(pmap_kernel());
+// 	/*
+// 	 * First remove the mapping from the kernel pmap so that it can
+// 	 * be reused, before we free the kva and let anyone else reuse
+// 	 * it.
+// 	 */
+// 	pmap_kremove(va, PAGE_SIZE);
+// 	pmap_update(pmap_kernel());
 
-	/*
-	 * Next free the kva so it can be reused by someone else.
-	 */
-	uvm_km_free(kernel_map, va, PAGE_SIZE, UVM_KMF_VAONLY);
-}
+// 	/*
+// 	 * Next free the kva so it can be reused by someone else.
+// 	 */
+// 	uvm_km_free(kernel_map, va, PAGE_SIZE, UVM_KMF_VAONLY);
+// }
 
 static int
 efi_ioctl_got_table(struct efi_get_table_ioc *ioc, void *ptr, size_t len)
@@ -269,10 +269,22 @@ efi_ioctl_got_table(struct efi_get_table_ioc *ioc, void *ptr, size_t len)
 	 */
 	ioc->table_len = len;
 
+	aprint_normal("DEBUG ioctl_got_table 1\n");
+
+	aprint_normal("DEBUG ioctl_got_table ioc->buf address = %p\n", ioc->buf);
+	aprint_normal("DEBUG ioctl_got_table userspace ptr address = %p\n", ptr);
+	aprint_normal("DEBUG ioctl_got_table buf len = %ld table len = %ld\n", ioc->buf_len, len);
+
 	/*
 	 * Copy out as much as we can into the user's allocated buffer.
 	 */
-	return copyout(ioc->buf, ptr, MIN(ioc->buf_len, len));
+	int error = copyout(ioc->buf, ptr, MIN(ioc->buf_len, len));
+
+	aprint_normal("DEBUG ioctl_got_table error = %d\n", error);
+
+	aprint_normal("DEBUG ioctl_got_table 2\n");
+
+	return error;
 }
 
 static int
@@ -280,13 +292,14 @@ efi_ioctl_get_esrt(struct efi_get_table_ioc *ioc,
     struct EFI_SYSTEM_RESOURCE_TABLE *tab)
 {
 	aprint_normal("DEBUG ioctl_get_esrt 1\n");
+
 	/*
 	 * Verify the firmware resource version is one we understand.
 	 */
 	if (tab->FwResourceVersion !=
 	    EFI_SYSTEM_RESOURCE_TABLE_FIRMWARE_RESOURCE_VERSION)
 		return ENOENT;
-	aprint_normal("DEBUG ioctl_get_table 2\n");
+	aprint_normal("DEBUG ioctl_get_esrt 2\n");
 
 	/*
 	 * Verify the resource count fits within the single page we
@@ -298,18 +311,22 @@ efi_ioctl_get_esrt(struct efi_get_table_ioc *ioc,
 	 */
 	const size_t entry_space = PAGE_SIZE -
 	    offsetof(struct EFI_SYSTEM_RESOURCE_TABLE, Entries);
-	aprint_normal("DEBUG ioctl_get_table entry_space = %ld\n", entry_space);
+	aprint_normal("DEBUG ioctl_get_esrt entry_space = %ld\n", entry_space);
 	if (tab->FwResourceCount > entry_space/sizeof(tab->Entries[0]))
 		return ENOENT;
-	aprint_normal("DEBUG ioctl_get_table 3\n");
+	aprint_normal("DEBUG ioctl_get_esrt 3\n");
+
+	aprint_normal("DEBUG ioctl_get_esrt fw resource count = %d\n", tab->FwResourceCount);
+	aprint_normal("DEBUG ioctl_get_esrt fw resource max = %d\n", tab->FwResourceCountMax);
+	aprint_normal("DEBUG ioctl_get_esrt fw resource version = %ld\n", tab->FwResourceVersion);
 
 	/*
 	 * Success!  Return everything through the last table entry.
 	 */
 	const size_t len = offsetof(struct EFI_SYSTEM_RESOURCE_TABLE,
 	    Entries[tab->FwResourceCount]);
-	aprint_normal("DEBUG ioctl_get_table len = %ld\n", len);
-	aprint_normal("DEBUG ioctl_get_table 4\n");
+	aprint_normal("DEBUG ioctl_get_esrt len = %ld\n", len);
+	aprint_normal("DEBUG ioctl_get_esrt 4\n");
 	return efi_ioctl_got_table(ioc, tab, len);
 }
 
@@ -334,10 +351,16 @@ efi_ioctl_get_table(struct efi_get_table_ioc *ioc)
 	 * configuration table.
 	 */
 	status = efi_ops->efi_gettab(&ioc->uuid, &addr);
-	if (status != EFI_SUCCESS)
-		return efi_status_to_error(status);
-
 	aprint_normal("DEBUG ioctl_get_table 1\n");
+	if (status != EFI_SUCCESS) {
+
+		aprint_normal("DEBUG ioctl_get_table addr = %ld\n", addr);
+		aprint_normal("DEBUG ioctl_get_table status = %ld\n", status);
+		//return efi_status_to_error(status);
+	}
+
+
+	aprint_normal("DEBUG ioctl_get_table 2\n");
 
 	/*
 	 * UEFI provides no generic way to identify the size of the
@@ -358,11 +381,11 @@ efi_ioctl_get_table(struct efi_get_table_ioc *ioc)
 		if ((tab = efi_map_pa(addr, &direct)) == NULL)
 			return ENOENT;
 		error = efi_ioctl_get_esrt(ioc, tab);
-		aprint_normal("DEBUG ioctl_get_table 2\n");
-		efi_unmap(tab, direct);
+		aprint_normal("DEBUG ioctl_get_table 3 = attempted copyout\n");
+		//efi_unmap(tab, direct);
 	} else {
 		error = ENOENT;
-		aprint_normal("DEBUG ioctl_get_table 3\n");
+		aprint_normal("DEBUG ioctl_get_table 4 = table is not esrt\n");
 	}
 
 	return error;
