@@ -150,8 +150,6 @@ main(int argc, char **argv)
 						  }
 					  }
 
-					  printf("DEBUG efitable 1\n");
-
 					  if (!got_table)
 						  fail("unsupported efi table");
 					  break;
@@ -160,8 +158,6 @@ main(int argc, char **argv)
 				  usage();
 		}
 	}
-	
-	printf("DEBUG efitable 2\n");
 
 	if (!table_set && !uuid_set)
 		fail("table is not set");
@@ -169,40 +165,22 @@ main(int argc, char **argv)
 	if (!got_table)
 		fail("unsupported table");
 
-	printf("DEBUG efitable 3\n");
-
 	efi_fd = open("/dev/efi", O_RDWR);
 	if (efi_fd < 0)
 		fail("/dev/efi");
 
-	printf("DEBUG efitable 4\n");
-
-	table.buf = malloc(56); // sizeof esrt with one entry
-	table.buf_len = 56;
-
 	table.uuid = efi_table_ops[efi_idx].uuid;
-	if (ioctl(efi_fd, EFIIOC_TABLE_GET, &table) == -1) {
-		printf("1st efiioc_table_get call failed\n");
-		fail("1st efiioc_table_get call failed");
-	}
-
-	printf("DEBUG efitable 5\n");
-	printf("DEBUG efitable table len = %ld\n", table.table_len);
+	if (ioctl(efi_fd, EFIIOC_TABLE_GET, &table) == -1)
+		fail(NULL);
 
 	table.buf = malloc(table.table_len);
 	table.buf_len = table.table_len;
 
-	printf("DEBUG efitable 6\n");
-
 	if (ioctl(efi_fd, EFIIOC_TABLE_GET, &table) == -1)
-		fail("2nd efiioc table get call failed");
+		fail(NULL);
 	close(efi_fd);
 
-	printf("DEBUG efitable 7\n");
-
 	efi_table_ops[efi_idx].parse(table.buf);
-
-	printf("DEBUG efitable 8\n");
 
 	return (rc);
 }

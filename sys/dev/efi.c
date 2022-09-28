@@ -151,17 +151,6 @@ efi_status_to_error(efi_status status)
 	}
 }
 
-// static int
-// efi_ioctl_table_get(struct efi_table_ioc* var)
-// {
-
-// 	efi_ops->efi_gettable(&var->uuid, &var->buf);
-
-
-
-// 	return 0;
-// }
-
 /* XXX move to efi.h */
 #define	EFI_SYSTEM_RESOURCE_TABLE_GUID					      \
 	{0xb122a263,0x3661,0x4f68,0x99,0x29,{0x78,0xf8,0xb0,0xd6,0x21,0x80}}
@@ -269,20 +258,10 @@ efi_ioctl_copyout_table(struct efi_get_table_ioc *ioc, void *ptr, size_t len)
 	 */
 	ioc->table_len = len;
 
-	aprint_normal("DEBUG ioctl_copyout_table 1\n");
-
-	aprint_normal("DEBUG ioctl_copyout_table ioc->buf address = %p\n", ioc->buf);
-	aprint_normal("DEBUG ioctl_copyout_table kernelspace ptr address = %p\n", ptr);
-	aprint_normal("DEBUG ioctl_copyout_table buf len = %ld table len = %ld\n", ioc->buf_len, len);
-
 	/*
 	 * Copy out as much as we can into the user's allocated buffer.
 	 */
-	int error = copyout(ptr, ioc->buf, MIN(ioc->buf_len, len)); // TODO switch arguments around
-
-	aprint_normal("DEBUG ioctl_copyout_table error = %d\n", error);
-
-	aprint_normal("DEBUG ioctl_copyout_table 2\n");
+	int error = copyout(ptr, ioc->buf, MIN(ioc->buf_len, len));
 
 	return error;
 }
@@ -291,15 +270,12 @@ static int
 efi_ioctl_get_esrt(struct efi_get_table_ioc *ioc,
     struct EFI_SYSTEM_RESOURCE_TABLE *tab)
 {
-	aprint_normal("DEBUG ioctl_get_esrt 1\n");
-
 	/*
 	 * Verify the firmware resource version is one we understand.
 	 */
 	if (tab->FwResourceVersion !=
 	    EFI_SYSTEM_RESOURCE_TABLE_FIRMWARE_RESOURCE_VERSION)
 		return ENOENT;
-	aprint_normal("DEBUG ioctl_get_esrt 2\n");
 
 	/*
 	 * Verify the resource count fits within the single page we
@@ -311,25 +287,14 @@ efi_ioctl_get_esrt(struct efi_get_table_ioc *ioc,
 	 */
 	const size_t entry_space = PAGE_SIZE -
 	    offsetof(struct EFI_SYSTEM_RESOURCE_TABLE, Entries);
-	aprint_normal("DEBUG ioctl_get_esrt entry_space = %ld\n", entry_space);
 	if (tab->FwResourceCount > entry_space/sizeof(tab->Entries[0]))
 		return ENOENT;
-	aprint_normal("DEBUG ioctl_get_esrt 3\n");
-
-	aprint_normal("DEBUG ioctl_get_esrt fw resource count = %d\n", tab->FwResourceCount);
-	aprint_normal("DEBUG ioctl_get_esrt fw resource max = %d\n", tab->FwResourceCountMax);
-	aprint_normal("DEBUG ioctl_get_esrt fw resource version = %ld\n", tab->FwResourceVersion);
 
 	/*
 	 * Success!  Return everything through the last table entry.
 	 */
 	const size_t len = offsetof(struct EFI_SYSTEM_RESOURCE_TABLE,
 	    Entries[tab->FwResourceCount]);
-	aprint_normal("DEBUG ioctl_get_esrt len = %ld\n", len);
-	aprint_normal("DEBUG ioctl_get_esrt 4\n");
-
-	//if (ioc->buf == NULL && len != 0)
-	//	return 0; // success!, return just the table length for now
 
 	return efi_ioctl_copyout_table(ioc, tab, len);
 }
@@ -348,23 +313,14 @@ efi_ioctl_get_table(struct efi_get_table_ioc *ioc)
 	if (efi_ops->efi_gettab == NULL)
 		return ENODEV;
 
-	aprint_normal("DEBUG ioctl_get_table 0\n");
-
 	/*
 	 * Get the address of the requested table out of the EFI
 	 * configuration table.
 	 */
 	status = efi_ops->efi_gettab(&ioc->uuid, &addr);
-	aprint_normal("DEBUG ioctl_get_table 1\n");
 	if (status != EFI_SUCCESS) {
-
-		aprint_normal("DEBUG ioctl_get_table addr = %ld\n", addr);
-		aprint_normal("DEBUG ioctl_get_table status = %ld\n", status);
-		//return efi_status_to_error(status);
+		return efi_status_to_error(status);
 	}
-
-
-	aprint_normal("DEBUG ioctl_get_table 2\n");
 
 	/*
 	 * UEFI provides no generic way to identify the size of the
@@ -385,11 +341,9 @@ efi_ioctl_get_table(struct efi_get_table_ioc *ioc)
 		if ((tab = efi_map_pa(addr, &direct)) == NULL)
 			return ENOENT;
 		error = efi_ioctl_get_esrt(ioc, tab);
-		aprint_normal("DEBUG ioctl_get_table 3 = attempted copyout\n");
 		efi_unmap(tab, direct);
 	} else {
 		error = ENOENT;
-		aprint_normal("DEBUG ioctl_get_table 4 = table is not esrt\n");
 	}
 
 	return error;
@@ -558,5 +512,5 @@ efi_register_ops(const struct efi_ops *ops)
 void
 efiattach(int count)
 {
-	aprint_normal("EFI: device attached at /dev/efi\n");
+	
 }
